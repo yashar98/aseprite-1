@@ -15,11 +15,60 @@
 --    Right click: Set clicked color as background color.
 --    Middle click: Set clicked color as foreground color and regenerate all shades based on this new color.
 
-function lerp(first, second, by)
+-- variables -------------------------------------------------------------------------
+
+-- main variables
+local dlg
+local autoPick = true;
+local fgListenerCode;
+local bgListenerCode;
+local eyeDropper = true;
+
+-- BG AND FG COLORS
+local FGcache;
+local BGcache;
+
+-- CORE COLOR
+local coreColor
+
+-- SHADING COLORS
+local S1;
+local S2;
+local S3;
+local S5;
+local S6;
+local S7;
+
+-- LIGHTNESS COLORS
+local L1;
+local L2;
+local L3;
+local L5;
+local L6;
+local L7;
+
+-- SATURATION COLORS
+local C1;
+local C2;
+local C3;
+local C5;
+local C6;
+local C7;
+
+-- HUE COLORS
+local H1;
+local H2;
+local H3;
+local H5;
+local H6;
+local H7;
+
+-- main functions ------------------------------------------------------------------
+local function lerp(first, second, by)
   return first * (1 - by) + second * by
 end
 
-function lerpRGBInt(color1, color2, amount)
+local function lerpRGBInt(color1, color2, amount)
   local X1 = 1 - amount
   local X2 = color1 >> 24 & 255
   local X3 = color1 >> 16 & 255
@@ -36,11 +85,11 @@ function lerpRGBInt(color1, color2, amount)
   return X10 << 24 | X11 << 16 | X12 << 8 | X13
 end
 
-function colorToInt(color)
+local function colorToInt(color)
   return (color.red << 16) + (color.green << 8) + (color.blue)
 end
 
-function colorShift(color, hueShift, satShift, lightShift, shadeShift)
+local function colorShift(color, hueShift, satShift, lightShift, shadeShift)
   local newColor = Color(color) -- Make a copy of the color so we don't modify the parameter
 
   -- SHIFT HUE
@@ -77,61 +126,101 @@ function colorShift(color, hueShift, satShift, lightShift, shadeShift)
   return newColor
 end
 
-function showColors(shadingColor, fg, bg, windowBounds)
-  local dlg
-  dlg =
-    Dialog {
-    title = "Color Shading"
+-- custom functions ----------------------------------------------------------------
+
+local function calculateColors(baseColor)
+
+  -- CORE COLOR 
+  coreColor = baseColor;
+
+  -- -- SHADING COLORS
+  S1 = colorShift(baseColor, 0, 0.3, -0.6, -0.6);
+  S2 = colorShift(baseColor, 0, 0.2, -0.2, -0.3);
+  S3 = colorShift(baseColor, 0, 0.1, -0.1, -0.1);
+  S5 = colorShift(baseColor, 0, 0.1, 0.1, 0.1);
+  S6 = colorShift(baseColor, 0, 0.2, 0.2, 0.2);
+  S7 = colorShift(baseColor, 0, 0.3, 0.5, 0.4);
+  
+  -- LIGHTNESS COLORS
+  L1 = colorShift(baseColor, 0, 0, -0.4, 0);
+  L2 = colorShift(baseColor, 0, 0, -0.2, 0);
+  L3 = colorShift(baseColor, 0, 0, -0.1, 0);
+  L5 = colorShift(baseColor, 0, 0, 0.1, 0);
+  L6 = colorShift(baseColor, 0, 0, 0.2, 0);
+  L7 = colorShift(baseColor, 0, 0, 0.4, 0);
+  
+  -- SATURATION COLORS
+  C1 = colorShift(baseColor, 0, -0.5, 0, 0);
+  C2 = colorShift(baseColor, 0, -0.2, 0, 0);
+  C3 = colorShift(baseColor, 0, -0.1, 0, 0);
+  C5 = colorShift(baseColor, 0, 0.1, 0, 0);
+  C6 = colorShift(baseColor, 0, 0.2, 0, 0);
+  C7 = colorShift(baseColor, 0, 0.5, 0, 0);
+  
+  -- HUE COLORS
+  H1 = colorShift(baseColor, -0.15, 0, 0, 0);
+  H2 = colorShift(baseColor, -0.1, 0, 0, 0);
+  H3 = colorShift(baseColor, -0.05, 0, 0, 0);
+  H5 = colorShift(baseColor, 0.05, 0, 0, 0);
+  H6 = colorShift(baseColor, 0.1, 0, 0, 0);
+  H7 = colorShift(baseColor, 0.15, 0, 0, 0);
+
+end
+
+local function updateDialogData()
+
+  dlg:modify{ id="base",
+    colors = {FGcache, BGcache};
+  }
+  dlg:modify{ id="sha",
+    colors = {S1, S2, S3, coreColor, S5, S6, S7};
+  }
+  dlg:modify{ id="lit",
+    colors = {L1, L2, L3, coreColor, L5, L6, L7};
+  }
+  dlg:modify{ id="sat",
+  colors = {C1, C2, C3, coreColor, C5, C6, C7};
+  }
+  dlg:modify{ id="hue",
+  colors = {H1, H2, H3, coreColor, H5, H6, H7};
   }
 
-  -- CACHING
-  local FGcache = app.fgColor
-  if(fg ~= nil) then
-    FGcache = fg
+end
+
+local function oneShadesClick(ev)
+  eyeDropper = false;
+      
+  if(ev.button == MouseButton.LEFT) then
+    app.fgColor = ev.color
+
+  elseif(ev.button == MouseButton.RIGHT) then
+
+    app.fgColor = ev.color
+    calculateColors(app.fgColor)
+    updateDialogData()
+    
+  elseif(ev.button == MouseButton.MIDDLE) then
+    
+    app.bgColor = ev.color
+
   end
 
-  local BGcache = app.bgColor
-  if(bg ~= nil) then
-    BGcache = bg
+end
+
+local function createDialog()
+
+  FGcache = app.fgColor;
+  BGcache = app.bgColor
+
+  dlg = Dialog {
+  title = "Color Shading",
+  onclose = function()
+   --onDialog close
+   app.events:off(fgListenerCode)
+   app.events:off(bgListenerCode)
+  
   end
-
-  -- CURRENT CORE COLOR TO GENERATE SHADING
-  local C = app.fgColor
-  if(shadingColor ~= nil) then
-    C = shadingColor
-  end
-
-  -- SHADING COLORS
-  local S1 = colorShift(C, 0, 0.3, -0.6, -0.6)
-  local S2 = colorShift(C, 0, 0.2, -0.2, -0.3)
-  local S3 = colorShift(C, 0, 0.1, -0.1, -0.1)
-  local S5 = colorShift(C, 0, 0.1, 0.1, 0.1)
-  local S6 = colorShift(C, 0, 0.2, 0.2, 0.2)
-  local S7 = colorShift(C, 0, 0.3, 0.5, 0.4)
-
-  -- LIGHTNESS COLORS
-  local L1 = colorShift(C, 0, 0, -0.4, 0)
-  local L2 = colorShift(C, 0, 0, -0.2, 0)
-  local L3 = colorShift(C, 0, 0, -0.1, 0)
-  local L5 = colorShift(C, 0, 0, 0.1, 0)
-  local L6 = colorShift(C, 0, 0, 0.2, 0)
-  local L7 = colorShift(C, 0, 0, 0.4, 0)
-
-  -- SATURATION COLORS
-  local C1 = colorShift(C, 0, -0.5, 0, 0)
-  local C2 = colorShift(C, 0, -0.2, 0, 0)
-  local C3 = colorShift(C, 0, -0.1, 0, 0)
-  local C5 = colorShift(C, 0, 0.1, 0, 0)
-  local C6 = colorShift(C, 0, 0.2, 0, 0)
-  local C7 = colorShift(C, 0, 0.5, 0, 0)
-
-  -- HUE COLORS
-  local H1 = colorShift(C, -0.15, 0, 0, 0)
-  local H2 = colorShift(C, -0.1, 0, 0, 0)
-  local H3 = colorShift(C, -0.05, 0, 0, 0)
-  local H5 = colorShift(C, 0.05, 0, 0, 0)
-  local H6 = colorShift(C, 0.1, 0, 0, 0)
-  local H7 = colorShift(C, 0.15, 0, 0, 0)
+  }
 
   -- DIALOGUE
   dlg:
@@ -141,89 +230,87 @@ function showColors(shadingColor, fg, bg, windowBounds)
     label = "Base",
     colors = {FGcache, BGcache},
     onclick = function(ev)
-      showColors(ev.color, FGcache, BGcache, dlg.bounds)
-      dlg:close()
+      calculateColors(ev.color)
+      updateDialogData()
     end
   }:button {
     -- GET BUTTON
     id = "get",
     text = "Get",
     onclick = function()
-      showColors(app.fgColor, app.fgColor, app.bgColor, dlg.bounds)
-      dlg:close()
+      FGcache = app.fgColor;
+      BGcache = app.bgColor;
+      calculateColors(app.fgColor)
+      updateDialogData()
     end
   }:shades {
      -- SHADING
     id = "sha",
     label = "Shade",
-    colors = {S1, S2, S3, C, S5, S6, S7},
+    colors = {S1, S2, S3, coreColor, S5, S6, S7},
     onclick = function(ev)
-      if(ev.button == MouseButton.LEFT) then
-        app.fgColor = ev.color
-      elseif(ev.button == MouseButton.RIGHT) then
-        app.bgColor = ev.color
-      elseif(ev.button == MouseButton.MIDDLE) then
-        app.fgColor = ev.color
-        showColors(ev.color, ev.color, BGcache, dlg.bounds)
-        dlg:close()
-      end
+
+      oneShadesClick(ev)
+
     end
   }:shades {
      -- LIGHTNESS
     id = "lit",
     label = "Light",
-    colors = {L1, L2, L3, C, L5, L6, L7},
+    colors = {L1, L2, L3, coreColor, L5, L6, L7},
     onclick = function(ev)
-      if(ev.button == MouseButton.LEFT) then
-        app.fgColor = ev.color
-      elseif(ev.button == MouseButton.RIGHT) then
-        app.bgColor = ev.color
-      elseif(ev.button == MouseButton.MIDDLE) then
-        app.fgColor = ev.color
-        showColors(ev.color, ev.color, BGcache, dlg.bounds)
-        dlg:close()
-      end
+      oneShadesClick(ev)
+
     end
   }:shades {
      -- SATURATION
     id = "sat",
     label = "Sat",
-    colors = {C1, C2, C3, C, C5, C6, C7},
+    colors = {C1, C2, C3, coreColor, C5, C6, C7},
     onclick = function(ev)
-      if(ev.button == MouseButton.LEFT) then
-        app.fgColor = ev.color
-      elseif(ev.button == MouseButton.RIGHT) then
-        app.bgColor = ev.color
-      elseif(ev.button == MouseButton.MIDDLE) then
-        app.fgColor = ev.color
-        showColors(ev.color, ev.color, BGcache, dlg.bounds)
-        dlg:close()
-      end
+      oneShadesClick(ev)
+
     end
   }:shades {
      -- HUE
     id = "hue",
     label = "Hue",
-    colors = {H1, H2, H3, C, H5, H6, H7},
+    colors = {H1, H2, H3, coreColor, H5, H6, H7},
     onclick = function(ev)
-      if(ev.button == MouseButton.LEFT) then
-        app.fgColor = ev.color
-        --showColors(SCcache, FGcache, BGcache, dlg.bounds)
-      elseif(ev.button == MouseButton.RIGHT) then
-        app.bgColor = ev.color
-        --showColors(SCcache, FGcache, BGcache, dlg.bounds)
-      elseif(ev.button == MouseButton.MIDDLE) then
-        app.fgColor = ev.color
-        showColors(ev.color, ev.color, BGcache, dlg.bounds)
-        dlg:close()
-      end
+      oneShadesClick(ev)
+
+    end
+  }:check{ 
+    id = "check",
+    label = "Mode",
+    text = "Auto Pick",
+    selected = autoPick,
+    onclick = function()
+      
+      autoPick = not autoPick;
     end
   }
-  
-  dlg:show {wait = false, bounds = windowBounds}
+
+  dlg:show {wait = false}
 end
 
--- Run the script
+
+local function onFgChange()
+  if(eyeDropper == true and autoPick == true) then
+    FGcache = app.fgColor;
+    BGcache = app.bgColor;
+    calculateColors(app.fgColor)
+    updateDialogData()
+  elseif(eyeDropper == false) then
+    --print("inside shades")
+  end
+  eyeDropper = true;
+end
+
+-- run the script ------------------------------------------------------------------
 do
-  showColors(app.fgColor)
+  calculateColors(app.fgColor)
+  createDialog();
+  fgListenerCode = app.events:on('fgcolorchange', onFgChange);
+  bgListenerCode = app.events:on('bgcolorchange', onFgChange);
 end
